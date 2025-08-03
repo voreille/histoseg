@@ -13,9 +13,23 @@
 * Modified by Bowen Cheng from https://github.com/fundamentalvision/Deformable-DETR
 */
 
-#include "ms_deform_attn.h"
+#pragma once
+#include <torch/extension.h>
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("ms_deform_attn_forward", &ms_deform_attn_forward, "ms_deform_attn_forward");
-  m.def("ms_deform_attn_backward", &ms_deform_attn_backward, "ms_deform_attn_backward");
-}
+at::Tensor ms_deform_attn_cuda_forward(
+    const at::Tensor &value, 
+    const at::Tensor &spatial_shapes,
+    const at::Tensor &level_start_index,
+    const at::Tensor &sampling_loc,
+    const at::Tensor &attn_weight,
+    const int im2col_step);
+
+std::vector<at::Tensor> ms_deform_attn_cuda_backward(
+    const at::Tensor &value, 
+    const at::Tensor &spatial_shapes,
+    const at::Tensor &level_start_index,
+    const at::Tensor &sampling_loc,
+    const at::Tensor &attn_weight,
+    const at::Tensor &grad_output,
+    const int im2col_step);
+
