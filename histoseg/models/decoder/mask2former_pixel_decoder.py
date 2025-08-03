@@ -118,8 +118,6 @@ class MSDeformAttnPixelDecoder(nn.Module):
         self.positional_encoding = PositionEmbeddingSine(conv_dim // 2, normalize=True)
         
         # Build transformer encoder
-        from ..ops.ms_deform_attn import MSDeformAttn
-        
         encoder_layer = MSDeformAttnTransformerEncoderLayer(
             d_model=conv_dim,
             nhead=transformer_nheads,
@@ -281,7 +279,7 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
         super().__init__()
         
         # Multi-scale deformable attention
-        from ..ops.ms_deform_attn import MSDeformAttn
+        from ..ops import MSDeformAttn
         self.self_attn = MSDeformAttn(d_model, n_levels, nhead, n_points)
         
         # FFN
