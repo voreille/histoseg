@@ -1,0 +1,75 @@
+# Trainer Configuration
+# Common trainer settings for different experiments
+
+# Base trainer configuration
+base_trainer:
+  max_steps: 40000
+  val_check_interval: 1000
+  gradient_clip_val: 0.01
+  gradient_clip_algorithm: norm
+  precision: 16
+  
+  # Distributed training
+  strategy: auto
+  devices: auto
+  
+  # Callbacks
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_miou
+        mode: max
+        save_top_k: 3
+        filename: "mask2former-{epoch:02d}-{val_miou:.3f}"
+        auto_insert_metric_name: false
+        save_last: true
+    
+    - class_path: pytorch_lightning.callbacks.EarlyStopping
+      init_args:
+        monitor: val_miou
+        mode: max
+        patience: 10
+        min_delta: 0.001
+    
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: step
+    
+    - class_path: pytorch_lightning.callbacks.RichProgressBar
+  
+  # Logging
+  logger:
+    - class_path: pytorch_lightning.loggers.WandbLogger
+      init_args:
+        project: histoseg
+        log_model: true
+        save_code: true
+    
+    - class_path: pytorch_lightning.loggers.TensorBoardLogger
+      init_args:
+        save_dir: logs/
+        log_graph: true
+
+# Fast development run
+dev_trainer:
+  fast_dev_run: true
+  devices: 1
+
+# Debug trainer (small scale)
+debug_trainer:
+  max_steps: 100
+  val_check_interval: 50
+  limit_train_batches: 10
+  limit_val_batches: 5
+  devices: 1
+  precision: 32
+  
+# Production trainer (full scale)
+prod_trainer:
+  max_steps: 80000
+  val_check_interval: 2000
+  gradient_clip_val: 0.01
+  precision: 16
+  strategy: ddp
+  devices: 4
+  num_nodes: 1

@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=64", "wheel", "pybind11"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "histoseg"
+version = "0.1.0"
+description = "A modular and extensible codebase for semantic segmentation in histopathology"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["histopathology", "segmentation", "computer vision", "pytorch", "lightning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research", 
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9", 
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.1",
+    "pytorch-lightning>=2.2",
+    "timm",
+    "transformers",
+    "wandb",
+    "omegaconf",
+    "hydra-core",
+    "einops", 
+    "opencv-python",
+    "pillow",
+    "numpy",
+    "matplotlib",
+    "tqdm",
+    "scipy",
+    "scikit-learn",
+    "albumentationsx",
+    "pybind11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/voreille/histoseg"
+Repository = "https://github.com/voreille/histoseg"
+Issues = "https://github.com/voreille/histoseg/issues"
+
+[project.scripts]
+histoseg-train = "histoseg.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["histoseg*"]
+
+[tool.setuptools.package-data]
+histoseg = ["**/*.yaml", "**/*.yml"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=histoseg --cov-report=html --cov-report=term"
+
+[tool.mypy]
+python_version = "3.8"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

@@ -1,0 +1,101 @@
+# ADE20K Dataset Configuration
+# Usage: python cli.py fit --config configs/ade20k.yaml
+
+trainer:
+  max_steps: 40000
+  val_check_interval: 1000
+  gradient_clip_val: 0.01
+  precision: 16
+  strategy: auto
+  devices: auto
+  logger:
+    - class_path: pytorch_lightning.loggers.WandbLogger
+      init_args:
+        project: histoseg-ade20k
+        name: mask2former_vitadapter
+    - class_path: pytorch_lightning.loggers.TensorBoardLogger
+      init_args:
+        save_dir: logs/
+        name: mask2former_vitadapter
+
+model:
+  class_path: histoseg.training.mask2former_module.Mask2FormerModule
+  init_args:
+    num_classes: 150
+    image_size: [512, 512]
+    learning_rate: 0.0001
+    weight_decay: 0.05
+    backbone:
+      class_path: histoseg.models.encoder.vit_adapter.ViTAdapter
+      init_args:
+        model_name: "vit_large_patch16_224"
+        pretrain_size: 224
+        conv_inplane: 64
+        interaction_indexes: [[0, 2], [3, 5], [6, 8], [9, 11]]
+        with_cffn: true
+        cffn_ratio: 0.25
+        deform_num_heads: 6
+        drop_path_rate: 0.1
+    pixel_decoder:
+      class_path: histoseg.models.decoder.mask2former_pixel_decoder.MSDeformAttnPixelDecoder
+      init_args:
+        input_shape:
+          res2: 64
+          res3: 128
+          res4: 256
+          res5: 512
+        transformer_dropout: 0.0
+        transformer_nheads: 8
+        transformer_dim_feedforward: 2048
+        transformer_enc_layers: 6
+        conv_dim: 256
+        mask_dim: 256
+        norm: "GN"
+        transformer_in_features: ["res2", "res3", "res4", "res5"]
+    transformer_decoder:
+      class_path: histoseg.models.decoder.mask2former_transformer_decoder.Mask2FormerTransformerDecoder
+      init_args:
+        hidden_dim: 256
+        num_queries: 100
+        nheads: 8
+        dim_feedforward: 2048
+        dec_layers: 9
+        pre_norm: false
+        mask_dim: 256
+        enforce_input_project: false
+
+data:
+  class_path: histoseg.data.dm_ade20k.ADE20KDataModule
+  init_args:
+    data_dir: data/ade20k
+    batch_size: 2
+    num_workers: 4
+    image_size: [512, 512]
+    num_classes: 150
+    train_transforms:
+      - class_path: albumentations.HorizontalFlip
+        init_args:
+          p: 0.5
+      - class_path: albumentations.RandomBrightnessContrast
+        init_args:
+          p: 0.2
+      - class_path: albumentations.ColorJitter
+        init_args:
+          p: 0.2
+    val_transforms: []
+
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: ${model.init_args.learning_rate}
+    weight_decay: ${model.init_args.weight_decay}
+    betas: [0.9, 0.999]
+
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: ${optimizer.init_args.lr}
+    total_steps: ${trainer.max_steps}
+    pct_start: 0.05
+    div_factor: 25.0
+    final_div_factor: 10000.0

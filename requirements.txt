@@ -1,0 +1,17 @@
+torch>=2.1
+pytorch-lightning>=2.2
+timm
+transformers
+wandb
+omegaconf
+hydra-core
+einops
+opencv-python
+pillow
+numpy
+matplotlib
+tqdm
+scipy
+scikit-learn
+albumentationsx
+pybind11

@@ -1,0 +1,48 @@
+# ViTAdapter Configuration
+# Shared configuration for ViTAdapter models
+
+backbone:
+  class_path: histoseg.models.encoder.vit_adapter.ViTAdapter
+  init_args:
+    # Model selection - can be any TIMM model or HuggingFace model
+    model_name: "vit_large_patch16_224"  # or "hf-hub:MahmoodLab/UNI2-h"
+    pretrain_size: 224
+    
+    # Adapter configuration
+    conv_inplane: 64
+    n_points: 4
+    deform_ratio: 1.0
+    
+    # Multi-level interaction configuration
+    # These determine which ViT layers contribute to each output level
+    interaction_indexes: 
+      - [0, 2]    # Early layers for high-res features
+      - [3, 5]    # Mid layers
+      - [6, 8]    # Later layers  
+      - [9, 11]   # Final layers for semantic features
+    
+    # Cross-scale fusion
+    with_cffn: true
+    cffn_ratio: 0.25
+    deform_num_heads: 6
+    
+    # Regularization
+    extractor_dropout: 0.0
+    drop_path_rate: 0.1
+    
+    # Memory optimization
+    with_cp: false  # Set to true if memory is limited
+
+# UNI2 specific configuration
+uni2_backbone:
+  class_path: histoseg.models.encoder.vit_adapter.ViTAdapter
+  init_args:
+    model_name: "hf-hub:MahmoodLab/UNI2-h"  # HuggingFace UNI2 model
+    pretrain_size: 224
+    conv_inplane: 64
+    interaction_indexes: [[0, 3], [4, 7], [8, 11], [12, 15]]  # Adjusted for larger model
+    with_cffn: true
+    cffn_ratio: 0.25
+    deform_num_heads: 8  # More heads for larger model
+    drop_path_rate: 0.1
+    with_cp: true  # Enable checkpointing for large model
