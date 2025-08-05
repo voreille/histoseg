@@ -161,7 +161,7 @@ gen/
 .vscode/
 
 # Data directories
-data/
+/data/
 datasets/
 *.h5
 *.hdf5
@@ -186,3 +186,7 @@ lightning_logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+
+# Reference code
+/reference_repos/

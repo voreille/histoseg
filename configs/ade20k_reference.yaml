@@ -1,0 +1,84 @@
+# ADE20K Configuration for HistoSeg
+# Adapted from benchmark-vfm-ss repository
+
+# Trainer configuration
+trainer:
+  max_epochs: 100
+  precision: 16-mixed
+  devices: 1
+  accumulate_grad_batches: 16
+  val_check_interval: 1000
+  log_every_n_steps: 50
+  enable_model_summary: false
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelSummary
+      init_args:
+        max_depth: 2
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_0_miou
+        mode: max
+        save_top_k: 3
+        save_last: true
+        filename: histoseg-{epoch:02d}-{val_0_miou:.3f}
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: step
+
+# Model configuration
+model:
+  class_path: histoseg.training.HistoSegModule
+  init_args:
+    img_size: [512, 512]
+    freeze_encoder: false
+    weight_decay: 0.01
+    lr: 0.0001
+    lr_multiplier_encoder: 0.1
+    num_classes: 150
+    ignore_idx: 255
+    num_metrics: 1
+    network:
+      class_path: histoseg.models.decoder.Mask2formerDecoder
+      init_args:
+        num_classes: 150
+        img_size: [512, 512]
+        encoder:
+          class_path: histoseg.models.encoder.ViTAdapter
+          init_args:
+            embed_dim: 768
+            depth: 12
+            num_heads: 12
+            pretrain_size: 224
+            img_size: [512, 512]
+
+# Data configuration  
+data:
+  class_path: histoseg.data.ADE20KDataModule
+  init_args:
+    root: ./data/ade20k
+    devices: 1
+    num_workers: 4
+    img_size: [512, 512]
+    batch_size: 2
+    num_classes: 150
+    num_metrics: 1
+    scale_range: [0.5, 2.0]
+    ignore_idx: 255
+
+# Optimizer (handled by the module)
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 0.0001
+    weight_decay: 0.01
+
+# Logger configuration
+logger:
+  class_path: lightning.pytorch.loggers.WandbLogger
+  init_args:
+    project: histoseg
+    name: mask2former_ade20k
+    save_dir: ./logs
+
+# Seed for reproducibility  
+seed_everything: 42

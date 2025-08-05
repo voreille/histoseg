@@ -1,5 +1,7 @@
 torch>=2.1
-pytorch-lightning>=2.2
+pytorch-lightning>=2.5
+torchvision>=0.15
+torchmetrics>=1.0
 timm
 transformers
 wandb
@@ -15,3 +17,4 @@ scipy
 scikit-learn
 albumentationsx
 pybind11
+gitignore-parser
