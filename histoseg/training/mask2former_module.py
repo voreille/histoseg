@@ -7,12 +7,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pytorch_lightning as pl
+import lightning as pl
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassJaccardIndex
 
-from ..models.encoder.vit_adapter import ViTAdapter
-from ..models.decoder.mask2former_pixel_decoder import MSDeformAttnPixelDecoder
+from ..models.mask2former_model import Mask2FormerModel, create_mask2former
 
 
 class Mask2FormerModule(pl.LightningModule):
@@ -59,44 +58,16 @@ class Mask2FormerModule(pl.LightningModule):
     
     def _build_model(self):
         """Build the complete Mask2Former model."""
-        # Build backbone
-        self.backbone = ViTAdapter(
-            model_name="vit_large_patch16_224",
-            pretrain_size=224,
-            conv_inplane=64,
-            interaction_indexes=[[0, 2], [3, 5], [6, 8], [9, 11]],
-            with_cffn=True,
-            cffn_ratio=0.25,
-            deform_num_heads=6,
-            drop_path_rate=0.1
-        )
-        
-        # Build pixel decoder
-        input_shape = {
-            "res2": 64,
-            "res3": 128, 
-            "res4": 256,
-            "res5": 512
-        }
-        
-        self.pixel_decoder = MSDeformAttnPixelDecoder(
-            input_shape=input_shape,
-            transformer_dropout=0.0,
-            transformer_nheads=8,
-            transformer_dim_feedforward=2048,
-            transformer_enc_layers=6,
-            conv_dim=256,
-            mask_dim=256,
-            norm="GN",
-            transformer_in_features=["res2", "res3", "res4", "res5"]
-        )
-        
-        # Simple segmentation head for now
-        self.seg_head = nn.Sequential(
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.GroupNorm(32, 256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, self.num_classes, kernel_size=1)
+        self.model = create_mask2former(
+            num_classes=self.num_classes,
+            model_name="hf-hub:MahmoodLab/UNI2-h",
+            hidden_dim=256,
+            num_queries=100,
+            num_decoder_layers=6,
+            num_heads=8,
+            dim_feedforward=2048,
+            dropout=0.1,
+            use_auxiliary_loss=True,
         )
         
     def _setup_metrics(self):
@@ -117,30 +88,37 @@ class Mask2FormerModule(pl.LightningModule):
         Forward pass through the model.
         
         Args:
-            x (torch.Tensor): Input images [B, C, H, W]
+            x (torch.Tensor): Input tensor of shape [B, 3, H, W]
             
         Returns:
-            torch.Tensor: Segmentation logits [B, num_classes, H, W]
+            torch.Tensor: Segmentation logits of shape [B, C, H, W]
         """
-        # Extract multi-scale features
-        features = self.backbone(x)
+        # Use the complete Mask2Former model
+        output = self.model(x)
         
-        # Process through pixel decoder
-        pixel_decoder_output = self.pixel_decoder(features)
+        # For semantic segmentation, we need to convert query-based output to dense prediction
+        # This is a simplified approach - in practice you might want more sophisticated post-processing
+        class_logits = output.logits  # [B, Q, C+1]
+        mask_logits = output.masks    # [B, Q, H, W]
         
-        # Generate segmentation predictions
-        mask_features = pixel_decoder_output.mask_features
+        # Remove no-object class and get per-pixel classification
+        class_probs = F.softmax(class_logits[..., :-1], dim=-1)  # [B, Q, C]
+        mask_probs = F.sigmoid(mask_logits)  # [B, Q, H, W]
         
-        # Upsample to input resolution
-        logits = self.seg_head(mask_features)
-        logits = F.interpolate(
-            logits, 
-            size=x.shape[-2:], 
-            mode='bilinear', 
-            align_corners=False
-        )
+        # Combine class and mask predictions
+        # Each query contributes to the final prediction weighted by its class confidence
+        final_logits = torch.einsum('bqc,bqhw->bchw', class_probs, mask_probs)  # [B, C, H, W]
         
-        return logits
+        # Upsample to input resolution if needed
+        if final_logits.shape[-2:] != x.shape[-2:]:
+            final_logits = F.interpolate(
+                final_logits, 
+                size=x.shape[-2:], 
+                mode='bilinear', 
+                align_corners=False
+            )
+        
+        return final_logits
     
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """Training step."""

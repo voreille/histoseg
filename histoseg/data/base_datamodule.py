@@ -5,7 +5,7 @@ Adapted from benchmark-vfm-ss repository.
 
 from typing import Optional
 import torch
-import pytorch_lightning as pl
+import lightning as pl
 from lightning.fabric.utilities.device_parser import _parse_gpu_ids
 
 

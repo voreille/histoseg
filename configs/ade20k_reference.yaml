@@ -27,29 +27,12 @@ trainer:
 
 # Model configuration
 model:
-  class_path: histoseg.training.HistoSegModule
+  class_path: histoseg.training.Mask2FormerModule
   init_args:
-    img_size: [512, 512]
-    freeze_encoder: false
-    weight_decay: 0.01
-    lr: 0.0001
-    lr_multiplier_encoder: 0.1
     num_classes: 150
-    ignore_idx: 255
-    num_metrics: 1
-    network:
-      class_path: histoseg.models.decoder.Mask2formerDecoder
-      init_args:
-        num_classes: 150
-        img_size: [512, 512]
-        encoder:
-          class_path: histoseg.models.encoder.ViTAdapter
-          init_args:
-            embed_dim: 768
-            depth: 12
-            num_heads: 12
-            pretrain_size: 224
-            img_size: [512, 512]
+    image_size: [512, 512]
+    learning_rate: 0.0001
+    weight_decay: 0.01
 
 # Data configuration  
 data:

@@ -5,7 +5,7 @@ Main training module adapted from benchmark-vfm-ss repository.
 Provides training, validation, and testing functionality for semantic segmentation.
 """
 
-import pytorch_lightning as lightning
+import lightning
 import torch
 import torch.nn as nn
 from torch.optim import AdamW

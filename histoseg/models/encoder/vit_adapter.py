@@ -21,6 +21,7 @@ from .adapter_modules import (
     deform_inputs,
 )
 from .vit_backbone import TIMMVisionTransformer
+from ..ops import MSDeformAttn
 
 
 class ViTAdapter(nn.Module):
@@ -189,7 +190,6 @@ class ViTAdapter(nn.Module):
         return pos_embed
 
     def _init_deform_weights(self, m):
-        from ..ops import MSDeformAttn
 
         if isinstance(m, MSDeformAttn):
             m._reset_parameters()

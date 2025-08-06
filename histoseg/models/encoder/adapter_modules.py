@@ -13,6 +13,8 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from timm.models.layers import DropPath
 
+from ..ops import MSDeformAttn
+
 _logger = logging.getLogger(__name__)
 
 
@@ -133,8 +135,6 @@ class Extractor(nn.Module):
         self.query_norm = norm_layer(dim)
         self.feat_norm = norm_layer(dim)
 
-        from ..ops import MSDeformAttn
-
         self.attn = MSDeformAttn(
             d_model=dim, n_levels=n_levels, n_heads=num_heads, n_points=n_points
         )
@@ -192,8 +192,6 @@ class Injector(nn.Module):
         self.with_cp = with_cp
         self.query_norm = norm_layer(dim)
         self.feat_norm = norm_layer(dim)
-
-        from ..ops import MSDeformAttn
 
         self.attn = MSDeformAttn(
             d_model=dim, n_levels=n_levels, n_heads=num_heads, n_points=n_points

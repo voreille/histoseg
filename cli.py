@@ -10,17 +10,18 @@ Usage:
     python cli.py test --ckpt_path path/to/checkpoint.ckpt
 """
 
-from types import MethodType
-from gitignore_parser import parse_gitignore
 import logging
+from types import MethodType
+
 import torch
+from gitignore_parser import parse_gitignore
 from lightning.pytorch import cli
 from lightning.pytorch.callbacks import ModelSummary
-from lightning.pytorch.loops.training_epoch_loop import _TrainingEpochLoop
 from lightning.pytorch.loops.fetchers import _DataFetcher, _DataLoaderIterDataFetcher
+from lightning.pytorch.loops.training_epoch_loop import _TrainingEpochLoop
 
-from histoseg.training import HistoSegModule
 from histoseg.data import BaseDataModule
+from histoseg.training import HistoSegModule
 
 
 def _should_check_val_fx(self: _TrainingEpochLoop, data_fetcher: _DataFetcher) -> bool:
