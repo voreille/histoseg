@@ -141,17 +141,66 @@ class ZipDataset(torch.utils.data.Dataset):
 
             if class_id != self.ignore_idx:
                 masks.append(target == label_id)
-                labels.append(torch.tensor([class_id]))
+                labels.append(class_id)  # Store as scalar, not tensor
 
-        target = {
-            "masks": tv_tensors.Mask(torch.stack(masks)),
-            "labels": torch.cat(labels),
-        }
+        # Convert to numpy for Albumentations (if we have masks)
+        if len(masks) > 0:
+            masks_np = [mask.numpy().astype('uint8') for mask in masks]
+            labels_tensor = torch.tensor(labels, dtype=torch.long)
+        else:
+            masks_np = []
+            labels_tensor = torch.zeros(0, dtype=torch.long)
 
+        # Convert image to numpy for Albumentations
+        img_np = img.permute(1, 2, 0).numpy()  # Convert from CHW to HWC
+
+        # Apply transforms (Albumentations)
         if self.transforms is not None:
-            img, target = self.transforms(img, target)
+            if len(masks_np) > 0:
+                transformed = self.transforms(image=img_np, masks=masks_np)
+                img_transformed = transformed["image"]
+                masks_transformed = transformed["masks"]
+                
+                # Convert back to tensors, filter out empty masks
+                valid_masks = []
+                valid_labels = []
+                for i, mask in enumerate(masks_transformed):
+                    if mask.sum() > 0:  # Only keep non-empty masks
+                        valid_masks.append(torch.from_numpy(mask).bool())
+                        valid_labels.append(labels_tensor[i])
+                
+                if len(valid_masks) > 0:
+                    masks_tensor = torch.stack(valid_masks)
+                    labels_tensor = torch.stack(valid_labels)
+                else:
+                    masks_tensor = torch.zeros(0, *img_transformed.shape[:2], dtype=torch.bool)
+                    labels_tensor = torch.zeros(0, dtype=torch.long)
+            else:
+                # No masks, just transform image
+                transformed = self.transforms(image=img_np)
+                img_transformed = transformed["image"]
+                masks_tensor = torch.zeros(0, *img_transformed.shape[:2], dtype=torch.bool)
+                labels_tensor = torch.zeros(0, dtype=torch.long)
+            
+            # Convert image back to tensor if needed
+            if isinstance(img_transformed, torch.Tensor):
+                img_tensor = img_transformed
+            else:
+                img_tensor = torch.from_numpy(img_transformed).permute(2, 0, 1)
+        else:
+            # No transforms, convert back to tensors
+            img_tensor = img.float() / 255.0  # Convert to [0,1] range
+            if len(masks) > 0:
+                masks_tensor = torch.stack([mask.bool() for mask in masks])
+            else:
+                masks_tensor = torch.zeros(0, *img.shape[-2:], dtype=torch.bool)
 
-        return img, target
+        # Return in Mask2Former format
+        return {
+            "pixel_values": img_tensor,
+            "mask_labels": masks_tensor,
+            "class_labels": labels_tensor,
+        }
 
     def _load_zips(self) -> Tuple[zipfile.ZipFile, zipfile.ZipFile]:
         """Load zip files, handling multiprocessing."""

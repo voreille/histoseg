@@ -6,11 +6,12 @@ Adapted from benchmark-vfm-ss repository for histoseg.
 from pathlib import Path
 from typing import Union
 from torch.utils.data import DataLoader
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 from .base_datamodule import BaseDataModule
 from .zip_dataset import ZipDataset
 from .mappings import get_ade20k_mapping
-from .transforms import SegmentationTransforms
 
 
 class ADE20KDataModule(BaseDataModule):
@@ -35,7 +36,7 @@ class ADE20KDataModule(BaseDataModule):
     def __init__(
         self,
         root: str,
-        devices,
+        # devices,
         num_workers: int,
         img_size: tuple[int, int] = (512, 512),
         batch_size: int = 1,
@@ -47,7 +48,7 @@ class ADE20KDataModule(BaseDataModule):
     ) -> None:
         super().__init__(
             root=root,
-            devices=devices,
+            # devices=devices,
             batch_size=batch_size,
             num_workers=num_workers,
             num_classes=num_classes,
@@ -58,17 +59,42 @@ class ADE20KDataModule(BaseDataModule):
         self.save_hyperparameters()
         self.scale_range = scale_range
 
-        # Create transforms
-        self.train_transforms = SegmentationTransforms(
-            img_size=img_size, 
-            scale_range=scale_range,
-            training=True
-        )
-        self.val_transforms = SegmentationTransforms(
-            img_size=img_size, 
-            scale_range=scale_range,
-            training=False
-        )
+        # Create Albumentations transforms
+        self.train_transforms = A.Compose([
+            A.RandomResizedCrop(
+                height=img_size[0], 
+                width=img_size[1], 
+                scale=scale_range,
+                ratio=(0.75, 1.33),
+                p=1.0
+            ),
+            A.HorizontalFlip(p=0.5),
+            A.ColorJitter(
+                brightness=0.125,    # 32/255 ≈ 0.125
+                contrast=0.5,
+                saturation=0.5,
+                hue=0.05,           # 18/360 = 0.05
+                p=0.8
+            ),
+            A.OneOf([
+                A.GaussNoise(var_limit=(10.0, 50.0), p=1.0),
+                A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+            ], p=0.2),
+            A.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            ),
+            ToTensorV2(),
+        ])
+        
+        self.val_transforms = A.Compose([
+            A.Resize(height=img_size[0], width=img_size[1]),
+            A.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            ),
+            ToTensorV2(),
+        ])
 
     def setup(self, stage: Union[str, None] = None) -> "ADE20KDataModule":
         """Setup train and validation datasets."""

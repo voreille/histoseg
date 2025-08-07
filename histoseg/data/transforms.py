@@ -81,6 +81,7 @@ class SegmentationTransforms(nn.Module):
             )
         return img
 
+    @torch.no_grad()
     def forward(self, img, target):
         """Apply transforms to image and target."""
         if self.training:

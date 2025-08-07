@@ -83,21 +83,30 @@ class Mask2FormerModule(pl.LightningModule):
         self.train_metrics = metrics.clone(prefix='train_')
         self.val_metrics = metrics.clone(prefix='val_')
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, pixel_values: torch.Tensor, mask_labels=None, class_labels=None) -> torch.Tensor:
         """
         Forward pass through the model.
         
         Args:
-            x (torch.Tensor): Input tensor of shape [B, 3, H, W]
+            pixel_values (torch.Tensor): Input tensor of shape [B, 3, H, W]
+            mask_labels (List[torch.Tensor], optional): List of mask labels for training
+            class_labels (List[torch.Tensor], optional): List of class labels for training
             
         Returns:
-            torch.Tensor: Segmentation logits of shape [B, C, H, W]
+            torch.Tensor or Mask2FormerOutput: Segmentation logits or full output during training
         """
-        # Use the complete Mask2Former model
-        output = self.model(x)
+        # During training, use the full model with labels for loss computation
+        if self.training and mask_labels is not None and class_labels is not None:
+            return self.model(
+                pixel_values=pixel_values,
+                mask_labels=mask_labels,
+                class_labels=class_labels
+            )
         
-        # For semantic segmentation, we need to convert query-based output to dense prediction
-        # This is a simplified approach - in practice you might want more sophisticated post-processing
+        # During inference, use the model without labels
+        output = self.model(pixel_values=pixel_values)
+        
+        # For semantic segmentation inference, convert query-based output to dense prediction
         class_logits = output.logits  # [B, Q, C+1]
         mask_logits = output.masks    # [B, Q, H, W]
         
@@ -110,10 +119,10 @@ class Mask2FormerModule(pl.LightningModule):
         final_logits = torch.einsum('bqc,bqhw->bchw', class_probs, mask_probs)  # [B, C, H, W]
         
         # Upsample to input resolution if needed
-        if final_logits.shape[-2:] != x.shape[-2:]:
+        if final_logits.shape[-2:] != pixel_values.shape[-2:]:
             final_logits = F.interpolate(
                 final_logits, 
-                size=x.shape[-2:], 
+                size=pixel_values.shape[-2:], 
                 mode='bilinear', 
                 align_corners=False
             )
@@ -122,38 +131,47 @@ class Mask2FormerModule(pl.LightningModule):
     
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """Training step."""
-        images = batch['image']
-        targets = batch['mask']
+        pixel_values = batch['pixel_values']
+        mask_labels = batch['mask_labels'] 
+        class_labels = batch['class_labels']
         
-        # Forward pass
-        logits = self(images)
+        # Forward pass with labels for loss computation
+        output = self(pixel_values, mask_labels, class_labels)
+        loss = output.loss
         
-        # Compute loss
-        loss = self.criterion(logits, targets)
-        
-        # Compute metrics
-        preds = torch.argmax(logits, dim=1)
-        self.train_metrics(preds, targets)
-        
-        # Log metrics
+        # Log training loss
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        
+        # For metrics, we need to convert to per-pixel format
+        # Get dense predictions for metrics computation
+        with torch.no_grad():
+            logits = self(pixel_values)  # Get dense predictions without labels
+            preds = torch.argmax(logits, dim=1)
+            
+            # Convert masks and labels to dense format for metrics
+            targets = self._convert_to_dense_targets(mask_labels, class_labels, logits.shape[-2:])
+            self.train_metrics(preds, targets)
+        
         self.log_dict(self.train_metrics, on_step=False, on_epoch=True)
         
         return loss
     
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """Validation step."""
-        images = batch['image']
-        targets = batch['mask']
+        pixel_values = batch['pixel_values']
+        mask_labels = batch['mask_labels'] 
+        class_labels = batch['class_labels']
         
-        # Forward pass
-        logits = self(images)
+        # Forward pass with labels for loss computation  
+        output = self(pixel_values, mask_labels, class_labels)
+        loss = output.loss
         
-        # Compute loss
-        loss = self.criterion(logits, targets)
-        
-        # Compute metrics
+        # Get dense predictions for metrics computation
+        logits = self(pixel_values)  # Get dense predictions without labels
         preds = torch.argmax(logits, dim=1)
+        
+        # Convert masks and labels to dense format for metrics
+        targets = self._convert_to_dense_targets(mask_labels, class_labels, logits.shape[-2:])
         self.val_metrics(preds, targets)
         
         # Log metrics
@@ -161,6 +179,37 @@ class Mask2FormerModule(pl.LightningModule):
         self.log_dict(self.val_metrics, on_step=False, on_epoch=True, prog_bar=True)
         
         return loss
+    
+    def _convert_to_dense_targets(self, mask_labels, class_labels, target_size):
+        """Convert list of masks and labels to dense segmentation targets."""
+        batch_size = len(mask_labels)
+        device = mask_labels[0].device if len(mask_labels) > 0 and len(mask_labels[0]) > 0 else self.device
+        
+        dense_targets = []
+        
+        for i in range(batch_size):
+            # Create empty target
+            target = torch.zeros(target_size, dtype=torch.long, device=device)
+            
+            masks = mask_labels[i]  # (N, H, W)
+            labels = class_labels[i]  # (N,)
+            
+            if len(masks) > 0 and len(labels) > 0:
+                # Resize masks if needed
+                if masks.shape[-2:] != target_size:
+                    masks = F.interpolate(
+                        masks.float().unsqueeze(0), 
+                        size=target_size, 
+                        mode='nearest'
+                    ).squeeze(0).bool()
+                
+                # Apply masks in order (later masks override earlier ones)
+                for mask, label in zip(masks, labels):
+                    target[mask] = label
+            
+            dense_targets.append(target)
+        
+        return torch.stack(dense_targets)
     
     def configure_optimizers(self):
         """Configure optimizers and learning rate schedulers."""
