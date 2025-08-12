@@ -87,8 +87,8 @@ class PanNukeDataModule(BaseDataModule):
                           hue=0.05,
                           p=0.8),
             A.OneOf([
-                A.GaussNoise(var_limit=(10.0, 50.0), p=1.0),
-                A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+                A.GaussNoise(p=1.0),
+                A.GaussianBlur(p=1.0),
             ],
                     p=0.2),
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
