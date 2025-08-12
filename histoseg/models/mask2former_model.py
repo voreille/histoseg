@@ -192,7 +192,7 @@ class Mask2FormerPixelLevelModule(nn.Module):
 class Mask2FormerModel(Mask2FormerPreTrainedModel):
     main_input_name = "pixel_values"
 
-    def __init__(self, config: Mask2FormerConfig):
+    def __init__(self, config: HistosegMask2FormerConfig):
         super().__init__(config)
         self.pixel_level_module = Mask2FormerPixelLevelModule(config)
         self.transformer_module = Mask2FormerTransformerModule(
@@ -277,7 +277,7 @@ class Mask2FormerModel(Mask2FormerPreTrainedModel):
 class Mask2FormerForUniversalSegmentation(Mask2FormerPreTrainedModel):
     main_input_name = "pixel_values"
 
-    def __init__(self, config: Mask2FormerConfig):
+    def __init__(self, config: HistosegMask2FormerConfig):
         super().__init__(config)
         self.model = Mask2FormerModel(config)
 

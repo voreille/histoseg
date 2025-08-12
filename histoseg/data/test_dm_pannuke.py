@@ -39,24 +39,24 @@ def test_panuke_datamodule():
         return
 
     # Test dataloaders
-    try:
-        train_loader = dm.train_dataloader()
-        dm.val_dataloader()  # Just test creation
+    # try:
+    train_loader = dm.train_dataloader()
+    dm.val_dataloader()  # Just test creation
 
-        print("✅ DataLoaders created successfully")
+    print("✅ DataLoaders created successfully")
 
-        # Test loading a batch
-        batch = next(iter(train_loader))
-        
-        print(f"🖼️  Batch pixel_values shape: {batch['pixel_values'].shape}")
-        print(f"🎯 Number of samples in batch: {len(batch['mask_labels'])}")
-        print(f"📋 First sample mask_labels shape: {batch['mask_labels'][0].shape}")
-        print(f"�️  First sample class_labels: {batch['class_labels'][0]}")
-        print(f"� First sample number of masks: {len(batch['mask_labels'][0])}")
+    # Test loading a batch
+    batch = next(iter(train_loader))
+    
+    print(f"🖼️  Batch pixel_values shape: {batch['pixel_values'].shape}")
+    print(f"🎯 Number of samples in batch: {len(batch['mask_labels'])}")
+    print(f"📋 First sample mask_labels shape: {batch['mask_labels'][0].shape}")
+    print(f"�️  First sample class_labels: {batch['class_labels'][0]}")
+    print(f"� First sample number of masks: {len(batch['mask_labels'][0])}")
 
-    except Exception as e:
-        print(f"❌ Error loading data: {e}")
-        return
+    # except Exception as e:
+    #     print(f"❌ Error loading data: {e}")
+    #     return
 
     print("🎉 ADE20K DataModule test completed successfully!")
 

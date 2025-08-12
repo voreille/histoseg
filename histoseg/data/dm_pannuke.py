@@ -45,7 +45,7 @@ class PanNukeDataModule(BaseDataModule):
             batch_size: int = 8,
             num_classes: int = 6,  # background + 5 nucleus types
             num_metrics: int = 1,
-            scale_range: tuple[float, float] = (0.5, 2.0),
+            scale_range: tuple[float, float] = (0.25, 1.0),
             ignore_idx: int = 255,
             test_fold: str = "fold3",
             val_split: float = 0.2,
@@ -74,8 +74,7 @@ class PanNukeDataModule(BaseDataModule):
 
         # Create Albumentations transforms
         self.train_transforms = A.Compose([
-            A.RandomResizedCrop(height=img_size[0],
-                                width=img_size[1],
+            A.RandomResizedCrop(size=img_size,
                                 scale=scale_range,
                                 ratio=(0.75, 1.33),
                                 p=1.0),
@@ -219,6 +218,37 @@ class PanNukeDataModule(BaseDataModule):
         """Create prediction dataloader (same as test)."""
         return self.test_dataloader()
 
+    @staticmethod
+    def train_collate(batch):
+        """Collate function for training batches."""
+        pixel_values = []
+        mask_labels = []
+        class_labels = []
+        image_ids = []
+        tissue_types = []
+
+        for item in batch:
+            pixel_values.append(item["pixel_values"])
+            mask_labels.append(item["mask_labels"])
+            class_labels.append(item["class_labels"])
+            image_ids.append(item["image_id"])
+            tissue_types.append(item["tissue_type"])
+
+
+        return {
+            "pixel_values": torch.stack(pixel_values),
+            "mask_labels": mask_labels,  # List of tensors
+            "class_labels": class_labels,  # List of tensors
+            "image_ids": image_ids,  # List of strings
+            "tissue_types": tissue_types,  # List of strings
+        }
+
+    @staticmethod
+    def eval_collate(batch):
+        """Collate function for evaluation batches."""
+        # Use same collation for evaluation
+        return PanNukeDataModule.train_collate(batch)
+
 
 class PanNukeDataset:
     """
@@ -251,6 +281,26 @@ class PanNukeDataset:
     def __len__(self):
         return len(self.indices)
 
+    def _process_instances(self, instances, categories):
+        """
+        Process instance segmentation data to extract masks and categories.
+        
+        Args:
+            instances: List of instance masks
+            categories: List of category labels for each instance
+            
+        Returns:
+            Tuple of (instance_masks, categories)
+        """
+        instance_masks = []
+        for instance in instances:
+            # Convert instance mask to binary mask
+            mask = np.array(instance).astype(np.uint8)
+            if mask.ndim == 3:
+                mask = mask[:, :, 0]
+            instance_masks.append(mask)
+        return np.stack(instance_masks, axis=0), np.stack(categories, axis=0)
+
     def __getitem__(self, idx):
         # Get the actual dataset index
         dataset_idx = self.indices[idx]
@@ -262,10 +312,6 @@ class PanNukeDataset:
         # Process instance masks and categories
         instance_masks, categories = self._process_instances(
             sample['instances'], sample['categories'])
-        instance_masks = [
-            np.array(mask).astype(np.uint8) for mask in instance_masks
-        ]
-        categories = [int(cat) for cat in categories]
 
         # Apply transforms to image only (masks will be transformed separately)
         if self.transforms:
@@ -273,23 +319,12 @@ class PanNukeDataset:
             # Apply transforms to image
             transformed = self.transforms(image=image, masks=instance_masks)
             image = transformed['image']
-            masks = transformed["masks"]
-
-        # Convert to format expected by base collate function
-        # Convert instance masks to tensor format
-        mask_labels = []
-        class_labels = []
-
-        for mask, category in zip(instance_masks, categories):
-            # Convert mask to tensor
-            mask_tensor = torch.from_numpy(mask.astype(np.float32))
-            mask_labels.append(mask_tensor)
-            class_labels.append(torch.tensor(category, dtype=torch.long))
+            instance_masks = transformed["masks"]
 
         return {
-            'pixel_values': image,  # This should be a tensor from ToTensorV2
-            'mask_labels': mask_labels,  # List of mask tensors
-            'class_labels': class_labels,  # List of category tensors
+            'pixel_values': image,
+            'mask_labels': instance_masks,
+            'class_labels': categories,
             'image_id': f"pannuke_{dataset_idx}",
             'tissue_type': sample['tissue'],
         }

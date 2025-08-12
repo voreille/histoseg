@@ -58,29 +58,3 @@ class ADE20KDataset(torch.utils.data.Dataset):
             annotation = self.transforms(annotation)
 
         return F.to_tensor(image), F.to_tensor(annotation)
-
-class PanNukeDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset: , transforms: Optional[Callable] = None):
-        self.dataset_path = Path(dataset_path)
-        self.transforms = transforms
-
-        # Load annotations
-        with open(self.dataset_path / "annotations.json", "r") as f:
-            self.annotations = json.load(f)
-
-        self.image_ids = list(self.annotations.keys())
-
-    def __len__(self):
-        return len(self.image_ids)
-
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        image_id = self.image_ids[idx]
-        annotation = self.annotations[image_id]
-
-        image_path = self.dataset_path / "images" / f"{image_id}.jpg"
-        image = Image.open(image_path).convert("RGB")
-
-        if self.transforms:
-            image = self.transforms(image=image)
-
-        return F.to_tensor(image), annotation

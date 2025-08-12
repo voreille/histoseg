@@ -70,6 +70,7 @@ class ViTAdapter(nn.Module):
         drop_path_rate=0.0,
         norm_layer=partial(nn.LayerNorm, eps=1e-6),
         model_name=None,
+        timm_kwargs=None,
         **kwargs,
     ):
         super().__init__()
@@ -88,14 +89,17 @@ class ViTAdapter(nn.Module):
         if model_name and "hf-hub:" in model_name:
             # Load from HuggingFace via TIMM
             self.backbone = timm.create_model(
-                model_name, pretrained=True, features_only=False
+                model_name,
+                pretrained=True,
+                features_only=False,
+                **timm_kwargs,
             )
             embed_dim = getattr(self.backbone, "embed_dim", embed_dim)
         elif model_name:
             # Load standard TIMM model
-            self.backbone = timm.create_model(
-                model_name, pretrained=True, features_only=False
-            )
+            self.backbone = timm.create_model(model_name,
+                                              pretrained=True,
+                                              features_only=False)
             embed_dim = getattr(self.backbone, "embed_dim", embed_dim)
         else:
             # Create custom ViT
@@ -122,32 +126,27 @@ class ViTAdapter(nn.Module):
 
         # Level embeddings and spatial prior module
         self.level_embed = nn.Parameter(torch.zeros(3, embed_dim))
-        self.spm = SpatialPriorModule(
-            inplanes=conv_inplane, embed_dim=embed_dim, with_cp=False
-        )
+        self.spm = SpatialPriorModule(inplanes=conv_inplane,
+                                      embed_dim=embed_dim,
+                                      with_cp=False)
 
         # Interaction blocks
-        self.interactions = nn.Sequential(
-            *[
-                InteractionBlock(
-                    dim=embed_dim,
-                    num_heads=deform_num_heads,
-                    n_points=n_points,
-                    init_values=init_values,
-                    drop_path=drop_path_rate,
-                    norm_layer=norm_layer,
-                    with_cffn=with_cffn,
-                    cffn_ratio=cffn_ratio,
-                    deform_ratio=deform_ratio,
-                    extra_extractor=(
-                        (True if i == len(interaction_indexes) - 1 else False)
-                        and use_extra_extractor
-                    ),
-                    with_cp=with_cp,
-                )
-                for i in range(len(interaction_indexes))
-            ]
-        )
+        self.interactions = nn.Sequential(*[
+            InteractionBlock(
+                dim=embed_dim,
+                num_heads=deform_num_heads,
+                n_points=n_points,
+                init_values=init_values,
+                drop_path=drop_path_rate,
+                norm_layer=norm_layer,
+                with_cffn=with_cffn,
+                cffn_ratio=cffn_ratio,
+                deform_ratio=deform_ratio,
+                extra_extractor=((True if i == len(interaction_indexes) -
+                                  1 else False) and use_extra_extractor),
+                with_cp=with_cp,
+            ) for i in range(len(interaction_indexes))
+        ])
 
         # Upsampling and normalization
         self.up = nn.ConvTranspose2d(embed_dim, embed_dim, 2, 2)
@@ -179,14 +178,15 @@ class ViTAdapter(nn.Module):
                 m.bias.data.zero_()
 
     def _get_pos_embed(self, pos_embed, H, W):
-        pos_embed = pos_embed.reshape(
-            1, self.pretrain_size[0] // 16, self.pretrain_size[1] // 16, -1
-        ).permute(0, 3, 1, 2)
-        pos_embed = (
-            F.interpolate(pos_embed, size=(H, W), mode="bicubic", align_corners=False)
-            .reshape(1, -1, H * W)
-            .permute(0, 2, 1)
-        )
+        pos_embed = pos_embed.reshape(1, self.pretrain_size[0] // 16,
+                                      self.pretrain_size[1] // 16,
+                                      -1).permute(0, 3, 1, 2)
+        pos_embed = (F.interpolate(pos_embed,
+                                   size=(H, W),
+                                   mode="bicubic",
+                                   align_corners=False).reshape(1, -1,
+                                                                H * W).permute(
+                                                                    0, 2, 1))
         return pos_embed
 
     def _init_deform_weights(self, m):
@@ -241,16 +241,17 @@ class ViTAdapter(nn.Module):
         for i, layer in enumerate(self.interactions):
             indexes = self.interaction_indexes[i]
             if len(blocks) > 0:
-                interaction_blocks = blocks[indexes[0] : indexes[-1] + 1]
+                interaction_blocks = blocks[indexes[0]:indexes[-1] + 1]
             else:
                 interaction_blocks = []
-            x, c = layer(x, c, interaction_blocks, deform_inputs1, deform_inputs2, H, W)
+            x, c = layer(x, c, interaction_blocks, deform_inputs1,
+                         deform_inputs2, H, W)
             outs.append(x.transpose(1, 2).view(bs, dim, H, W).contiguous())
 
         # Split & Reshape
-        c2 = c[:, 0 : c2.size(1), :]
-        c3 = c[:, c2.size(1) : c2.size(1) + c3.size(1), :]
-        c4 = c[:, c2.size(1) + c3.size(1) :, :]
+        c2 = c[:, 0:c2.size(1), :]
+        c3 = c[:, c2.size(1):c2.size(1) + c3.size(1), :]
+        c4 = c[:, c2.size(1) + c3.size(1):, :]
 
         c2 = c2.transpose(1, 2).view(bs, dim, H * 2, W * 2).contiguous()
         c3 = c3.transpose(1, 2).view(bs, dim, H, W).contiguous()
@@ -259,11 +260,18 @@ class ViTAdapter(nn.Module):
 
         if self.add_vit_feature:
             x1, x2, x3, x4 = outs
-            x1 = F.interpolate(x1, scale_factor=4, mode="bilinear", align_corners=False)
-            x2 = F.interpolate(x2, scale_factor=2, mode="bilinear", align_corners=False)
-            x4 = F.interpolate(
-                x4, scale_factor=0.5, mode="bilinear", align_corners=False
-            )
+            x1 = F.interpolate(x1,
+                               scale_factor=4,
+                               mode="bilinear",
+                               align_corners=False)
+            x2 = F.interpolate(x2,
+                               scale_factor=2,
+                               mode="bilinear",
+                               align_corners=False)
+            x4 = F.interpolate(x4,
+                               scale_factor=0.5,
+                               mode="bilinear",
+                               align_corners=False)
             c1, c2, c3, c4 = c1 + x1, c2 + x2, c3 + x3, c4 + x4
 
         # Final Norm
