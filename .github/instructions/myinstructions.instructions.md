@@ -5,12 +5,12 @@ applyTo: '**'
 # INSTRUCTIONS.md
 
 ## 📛 Project Name
-**histoseg** – A modular and extensible codebase for semantic segmentation in histopathology using Mask2Former and ViT backbones like UNI2.
+**histoseg** – A modular and extensible codebase for universal segmentation in histopathology using Mask2Former and ViT backbones like UNI2.
 
 ---
 
 ## 🎯 Goal
-Build a PyTorch Lightning-based research codebase for semantic segmentation using:
+Build a PyTorch Lightning-based research codebase for universal segmentation using:
 - **Mask2Former architecture**, adapted for newer versions of PyTorch and `torch.compile`
 - **UNI2-h or other ViT-based backbones** from HuggingFace/TIMM
 - **Custom ViT Adapter module** and **Pixel Decoder**
