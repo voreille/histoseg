@@ -71,7 +71,6 @@ class ViTAdapter(nn.Module):
         norm_layer=partial(nn.LayerNorm, eps=1e-6),
         model_name=None,
         timm_kwargs=None,
-        **kwargs,
     ):
         super().__init__()
 

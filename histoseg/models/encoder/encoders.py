@@ -2,8 +2,34 @@ from typing import Dict, List
 
 import torch
 import torch.nn as nn
+import timm
 
 from histoseg.models.encoder.vit_adapter import ViTAdapter
+from histoseg.models.configuration_mask2former import HistosegMask2FormerConfig
+
+DEFAULT_HISTOSEG_BACKBONE_CONFIG = {
+    "encoder_type": "vit_adapter",
+    "embed_dim": 768,
+    "out_indices": [0, 1, 2, 3],
+    "freeze_encoder": True,
+    "feature_channels": [64, 128, 256, 512],
+    "timm_name": "hf-hub:MahmoodLab/UNI2-h",
+    "timm_kwargs": {
+        'img_size': 224,
+        'patch_size': 14,
+        'depth': 24,
+        'num_heads': 24,
+        'init_values': 1e-5,
+        'embed_dim': 1536,
+        'mlp_ratio': 2.66667 * 2,
+        'num_classes': 0,
+        'no_embed_class': True,
+        'mlp_layer': timm.layers.SwiGLUPacked,
+        'act_layer': torch.nn.SiLU,
+        'reg_tokens': 8,
+        'dynamic_img_size': True
+    }
+}
 
 
 class BaseEncoder(nn.Module):
@@ -34,24 +60,26 @@ class BaseEncoder(nn.Module):
             param.requires_grad = False
 
 
-def create_encoder(config: Dict) -> BaseEncoder:
+def create_encoder(config: HistosegMask2FormerConfig) -> BaseEncoder:
     """
     Factory function to create an encoder based on the configuration.
 
     Args:
-        config (Dict): Configuration dictionary containing encoder parameters.
+        config (HistosegMask2FormerConfig): Configuration object containing encoder settings.
 
     Returns:
         nn.Module: The instantiated encoder model.
     """
-    encoder_type = config.get("encoder_type", "vit_adapter").lower()
+    histoseg_backbone_config = config.get("histoseg_backbone_config",
+                                          DEFAULT_HISTOSEG_BACKBONE_CONFIG)
+    encoder_type = histoseg_backbone_config.get("encoder_type", None)
 
     if encoder_type == "vit_adapter":
-        return ViTAdaptedEncoder(config)
+        return ViTAdaptedEncoder(histoseg_backbone_config)
     elif encoder_type == "resnet":
-        return ResNetEncoder(config)
+        return ResNetEncoder(histoseg_backbone_config)
     elif encoder_type == "swin":
-        return SwinEncoder(config)
+        return SwinEncoder(histoseg_backbone_config)
     else:
         raise ValueError(f"Unknown encoder type: {encoder_type}")
 
@@ -121,6 +149,7 @@ class ResNetEncoder(BaseEncoder):
 
         # Register hooks for different ResNet stages
         def get_activation(name):
+
             def hook(model, input, output):
                 self.features[name] = output
 

@@ -2,7 +2,7 @@
 Mask2Former Lightning Module for training and inference.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import lightning as pl
 import torch
@@ -13,10 +13,8 @@ from torchmetrics.classification import MulticlassJaccardIndex
 from transformers.models.mask2former.modeling_mask2former import (
     Mask2FormerForUniversalSegmentationOutput, )
 
-from ..models.mask2former_model import (
-    HistosegMask2FormerConfig,
-    Mask2FormerForUniversalSegmentation,
-)
+from ..models.configuration_mask2former import HistosegMask2FormerConfig
+from ..models.mask2former_model import Mask2FormerForUniversalSegmentation
 
 
 class Mask2FormerModule(pl.LightningModule):
@@ -38,6 +36,7 @@ class Mask2FormerModule(pl.LightningModule):
                  image_size: Tuple[int, int] = (512, 512),
                  learning_rate: float = 1e-4,
                  weight_decay: float = 0.05,
+                 config: HistosegMask2FormerConfig = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.save_hyperparameters()
@@ -48,7 +47,9 @@ class Mask2FormerModule(pl.LightningModule):
         self.weight_decay = weight_decay
 
         # Build model components
-        config = HistosegMask2FormerConfig()
+        if config is None:
+            config = HistosegMask2FormerConfig()
+
         self.model = Mask2FormerForUniversalSegmentation(config)
 
         # Setup metrics

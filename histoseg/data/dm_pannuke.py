@@ -50,7 +50,12 @@ class PanNukeDataModule(BaseDataModule):
             test_fold: str = "fold3",
             val_split: float = 0.2,
             random_seed: int = 42,
-            **kwargs) -> None:
+            pin_memory: bool = True,
+            persistent_workers: bool = True,
+            mean: tuple[float] = (0.485, 0.456, 0.406),
+            std: tuple[float] = (0.229, 0.224, 0.225),
+            **kwargs,
+    ) -> None:
         super().__init__(
             root=root or "/tmp/pannuke",  # Dummy path for compatibility
             batch_size=batch_size,
@@ -59,12 +64,18 @@ class PanNukeDataModule(BaseDataModule):
             num_metrics=num_metrics,
             ignore_idx=ignore_idx,
             img_size=img_size,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            **kwargs,
         )
-        self.save_hyperparameters()
         self.scale_range = scale_range
         self.test_fold = test_fold
         self.val_split = val_split
         self.random_seed = random_seed
+        self.mean = mean
+        self.std = std
+
+        self.save_hyperparameters()
 
         # Validate test_fold argument
         if test_fold not in ["fold1", "fold2", "fold3"]:
@@ -89,15 +100,14 @@ class PanNukeDataModule(BaseDataModule):
             A.OneOf([
                 A.GaussNoise(p=1.0),
                 A.GaussianBlur(p=1.0),
-            ],
-                    p=0.2),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ], p=0.2),
+            A.Normalize(mean=self.mean, std=self.std),
             ToTensorV2(),
         ])
 
         self.val_transforms = A.Compose([
             A.Resize(height=img_size[0], width=img_size[1]),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            A.Normalize(mean=self.mean, std=self.std),
             ToTensorV2(),
         ])
 
@@ -200,6 +210,7 @@ class PanNukeDataModule(BaseDataModule):
 
     def val_dataloader(self):
         """Create validation dataloader."""
+        print(f"Dataloader kwargs: {self.dataloader_kwargs}")
         return DataLoader(
             self.val_dataset,
             collate_fn=self.eval_collate,
@@ -234,7 +245,6 @@ class PanNukeDataModule(BaseDataModule):
             image_ids.append(item["image_id"])
             tissue_types.append(item["tissue_type"])
 
-
         return {
             "pixel_values": torch.stack(pixel_values),
             "mask_labels": mask_labels,  # List of tensors
@@ -250,7 +260,7 @@ class PanNukeDataModule(BaseDataModule):
         return PanNukeDataModule.train_collate(batch)
 
 
-class PanNukeDataset:
+class PanNukeDataset(torch.utils.data.Dataset):
     """
     PanNuke dataset wrapper for individual samples.
     
@@ -292,6 +302,9 @@ class PanNukeDataset:
         Returns:
             Tuple of (instance_masks, categories)
         """
+        if len(instances) == 0:
+            return np.empty((0, *self.img_size)), np.empty((0, ))
+
         instance_masks = []
         for instance in instances:
             # Convert instance mask to binary mask
